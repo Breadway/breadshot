@@ -1,0 +1,23 @@
+[package]
+name = "breadshot"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+authors = ["Breadway"]
+description = "Screenshot utility for the bread ecosystem"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

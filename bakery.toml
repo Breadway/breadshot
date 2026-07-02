@@ -1,0 +1,12 @@
+name = "breadshot"
+description = "Wayland screenshot utility for the bread ecosystem — wraps grim/slurp/wl-copy with Hyprland-aware geometry"
+binaries = ["breadshot"]
+system_deps = ["grim", "slurp", "wl-clipboard"]
+optional_system_deps = ["hyprland", "hyprpicker", "libnotify"]
+bread_deps = []
+
+[config]
+dir = "~/.config/breadshot"
+
+[install]
+post_install = []
