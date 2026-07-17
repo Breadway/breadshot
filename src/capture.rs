@@ -303,12 +303,9 @@ fn send_notification(title: &str, msg: &str, timeout: u32, path: &Path) {
 // --- helpers ---
 
 fn hyprctl_json(subcmd: &str) -> Result<Value> {
-    let out = Command::new("hyprctl")
-        .args(["-j", subcmd])
-        .output()
-        .context("running hyprctl")?;
-    serde_json::from_slice(&out.stdout)
-        .with_context(|| format!("parsing hyprctl {subcmd} output"))
+    // Was a bare Command::new("hyprctl").output() with no timeout.
+    bread_utils::proc::run_json("hyprctl", &["-j", subcmd], std::time::Duration::from_secs(3))
+        .with_context(|| format!("running/parsing hyprctl {subcmd}"))
 }
 
 fn slurp(args: &[&str]) -> Result<String> {
