@@ -1,6 +1,20 @@
 # breadshot
 
-Wayland screenshot utility for the bread ecosystem. Wraps `grim`, `slurp`, and `wl-copy` with Hyprland-aware geometry resolution, clipboard integration, and desktop notifications.
+Wayland screenshot **orchestrator** for the bread ecosystem — not a GUI editor.
+It shells out to `grim`, `slurp`, and `wl-copy` with Hyprland-aware geometry
+resolution, clipboard integration, and desktop notifications.
+
+This is a different job from `bread-screenshots` (the crate in
+`bread-ecosystem`): that one is a capture harness for screenshotting sibling
+apps in CI. Do not merge the two.
+
+On BOS, Hyprland binds `Super+Shift+S` / `C` / `P` to breadshot (not grimblast):
+
+| Bind | Action | Command |
+|------|--------|---------|
+| `Super+Shift+S` | Region → file (and clipboard) | `breadshot region` |
+| `Super+Shift+C` | Region → clipboard only | `breadshot region --clipboard-only` |
+| `Super+Shift+P` | Screen → file | `breadshot active-output` |
 
 ## Requirements
 
