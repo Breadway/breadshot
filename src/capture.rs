@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use clap::ValueEnum;
 use serde_json::Value;
 use std::{
     io::Write,
@@ -12,9 +11,9 @@ use crate::config::Config;
 
 /// Sibling-app id in bread's `KNOWN_APPS` registry. Events publish as
 /// `bread.shot.*`. See `EVENTS.md`.
-const APP_ID: &str = "shot";
+pub(crate) const APP_ID: &str = "shot";
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone)]
 pub enum Mode {
     /// Select a region interactively
     Region,
@@ -23,10 +22,8 @@ pub enum Mode {
     /// Click to select a monitor
     Output,
     /// Capture the active window
-    #[value(name = "active-window")]
     ActiveWindow,
     /// Capture the active monitor
-    #[value(name = "active-output")]
     ActiveOutput,
 }
 
@@ -353,8 +350,12 @@ fn send_notification(title: &str, msg: &str, timeout: u32, path: &Path) {
 
 fn hyprctl_json(subcmd: &str) -> Result<Value> {
     // Was a bare Command::new("hyprctl").output() with no timeout.
-    bread_utils::proc::run_json("hyprctl", &["-j", subcmd], std::time::Duration::from_secs(3))
-        .with_context(|| format!("running/parsing hyprctl {subcmd}"))
+    bread_utils::proc::run_json(
+        "hyprctl",
+        &["-j", subcmd],
+        std::time::Duration::from_secs(3),
+    )
+    .with_context(|| format!("running/parsing hyprctl {subcmd}"))
 }
 
 fn slurp(args: &[&str]) -> Result<String> {

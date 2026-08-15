@@ -47,7 +47,13 @@ make install PREFIX=/usr
 
 ```
 breadshot <mode> [options]
+breadshot listen
 ```
+
+`breadshot listen` is the long-running process that honors
+`bread.command.shot.region` on the bread event bus (clipboard-only
+region capture). See [EVENTS.md](EVENTS.md). Without it, the CLI still
+works; bus commands are a silent no-op.
 
 ### Modes
 

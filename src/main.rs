@@ -1,8 +1,9 @@
 mod capture;
 mod config;
+mod listen;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
@@ -14,12 +15,19 @@ use config::Config;
     name = "breadshot",
     version,
     about = "Screenshot utility for the bread ecosystem",
-    disable_help_subcommand = true,
+    disable_help_subcommand = true
 )]
 struct Cli {
-    /// Capture mode
-    mode: Mode,
+    #[command(subcommand)]
+    command: Command,
 
+    /// Path to config file
+    #[arg(long, value_name = "FILE", global = true)]
+    config: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct CaptureOpts {
     /// Copy to clipboard only, don't save to disk
     #[arg(long, short = 'c')]
     clipboard_only: bool,
@@ -39,10 +47,37 @@ struct Cli {
     /// Override output filename (without path)
     #[arg(long, short = 'f', value_name = "NAME")]
     filename: Option<String>,
+}
 
-    /// Path to config file
-    #[arg(long, value_name = "FILE")]
-    config: Option<PathBuf>,
+#[derive(Subcommand)]
+enum Command {
+    /// Select a region interactively
+    Region(CaptureOpts),
+    /// Click to select a window
+    Window(CaptureOpts),
+    /// Click to select a monitor
+    Output(CaptureOpts),
+    /// Capture the active window
+    #[command(name = "active-window")]
+    ActiveWindow(CaptureOpts),
+    /// Capture the active monitor
+    #[command(name = "active-output")]
+    ActiveOutput(CaptureOpts),
+    /// Subscribe to bread.command.shot.** and honor region captures
+    Listen,
+}
+
+impl Command {
+    fn into_capture(self) -> Option<(Mode, CaptureOpts)> {
+        match self {
+            Self::Region(opts) => Some((Mode::Region, opts)),
+            Self::Window(opts) => Some((Mode::Window, opts)),
+            Self::Output(opts) => Some((Mode::Output, opts)),
+            Self::ActiveWindow(opts) => Some((Mode::ActiveWindow, opts)),
+            Self::ActiveOutput(opts) => Some((Mode::ActiveOutput, opts)),
+            Self::Listen => None,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -58,15 +93,19 @@ fn main() -> Result<()> {
         None => Config::load()?,
     };
 
+    let Some((mode, opts)) = cli.command.into_capture() else {
+        return listen::run(&config);
+    };
+
     capture::run(
-        &cli.mode,
+        &mode,
         &config,
         Overrides {
-            clipboard_only: cli.clipboard_only,
-            silent: cli.silent,
-            freeze: cli.freeze,
-            output_dir: cli.output_dir,
-            filename: cli.filename,
+            clipboard_only: opts.clipboard_only,
+            silent: opts.silent,
+            freeze: opts.freeze,
+            output_dir: opts.output_dir,
+            filename: opts.filename,
         },
     )
 }
