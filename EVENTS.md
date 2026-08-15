@@ -22,16 +22,20 @@ received while `breadshot listen` is running — that process holds the
 
 | Event | Data | When |
 |-------|------|------|
-| `bread.shot.captured` | `{ "mode": "region" \| "window" \| "output" \| "active-window" \| "active-output", "clipboard": bool, "path": <string or null> }` | A capture completed successfully (grim + clipboard write both returned), whether triggered by the CLI or by `bread.command.shot.region`. Not emitted on a cancelled slurp selection, a missing dependency, or a grim/wl-copy failure. |
+| `bread.shot.captured` | `{ "mode": "region" \| "window" \| "output" \| "active-window" \| "active-output", "clipboard": bool, "path": <string or null> }` | A capture completed successfully (grim + clipboard write both returned), whether triggered by the CLI or by `bread.command.shot.region` / `bread.command.shot.annotate`. Not emitted on a cancelled slurp selection, a missing dependency, or a grim/wl-copy failure. `breadshot annotate` publishes `mode: "region"`. |
 | `bread.shot.region.done` | `{ "clipboard": true, "path": null }` | `bread.command.shot.region` was received and the region capture succeeded. |
 | `bread.shot.region.failed` | `{ "error": "<message>" }` | `bread.command.shot.region` was received but the capture failed (cancelled slurp, missing dependency, grim/wl-copy error). |
+| `bread.shot.annotate.done` | `{ "clipboard": true, "path": <string or null> }` | `bread.command.shot.annotate` was received and the region capture (plus optional satty/swappy pass) succeeded. `path` is the saved file, or `null` if the annotator exited without writing it. |
+| `bread.shot.annotate.failed` | `{ "error": "<message>" }` | `bread.command.shot.annotate` was received but the capture failed (cancelled slurp, missing grim/slurp, annotator error). Missing satty/swappy is not a failure — breadshot warns and falls back to grim+slurp. |
 
-`mode` is the CLI mode name (same strings `breadshot <mode>` accepts).
+`mode` is the CLI capture-mode name (`region`, `window`, `output`,
+`active-window`, `active-output`) — not the `annotate` subcommand.
 `clipboard` is whether the PNG was written to the clipboard — both current
 capture paths do this (`save_and_copy` and `--clipboard-only`). `path` is
 the saved file, or `null` when `--clipboard-only` was used (no file on
-disk). The listen-triggered region path is clipboard-only, so `path` is
-always `null` on `bread.shot.region.done`.
+disk) or the annotator exited without writing one. The listen-triggered
+region path is clipboard-only, so `path` is always `null` on
+`bread.shot.region.done`.
 
 The image bytes themselves are never included in the payload. The event
 bus is a notification that a capture happened, not a channel for the
@@ -46,11 +50,17 @@ bread convention, not a breadshot bug.
 | Verb | Data | Effect |
 |------|------|--------|
 | `region` | none | Same interactive region capture as `breadshot region --clipboard-only`. Emits `bread.shot.region.done`/`.failed`. A successful capture also publishes `bread.shot.captured` the same way the CLI path does. |
+| `annotate` | none | Same as `breadshot annotate`: region capture, then freeze the frame in `satty` (preferred) or `swappy` for arrows/text/rect. Emits `bread.shot.annotate.done`/`.failed`. A successful capture also publishes `bread.shot.captured` (`mode: "region"`). If neither annotator is installed, breadshot warns and saves the unannotated region shot. |
 
 ```lua
 bread.spawn(function()
     bread.emit("bread.command.shot.region")
     bread.wait("bread.shot.region.done", { timeout = 30000 })
+end)
+
+bread.spawn(function()
+    bread.emit("bread.command.shot.annotate")
+    bread.wait("bread.shot.annotate.done", { timeout = 120000 })
 end)
 ```
 
@@ -60,16 +70,17 @@ still shell out:
 ```lua
 bread.exec("breadshot region")
 bread.exec("breadshot active-output")
+bread.exec("breadshot annotate")
 ```
 
 ### Not implemented: extra verbs
 
 There is no `window`, `output`, `active-window`, `active-output`, `pin`,
 `select`, or `edit` command verb. The CLI already covers the other
-capture modes as synchronous one-shots, and breadshot has no editor, no
-history, and no concept those other verbs could hang on. If/when that
-changes, the corresponding `bread.command.shot.*` verb should be added
-at the same time, not stubbed as a no-op ahead of it.
+capture modes as synchronous one-shots. Annotation is the `annotate`
+verb (a thin satty/swappy hand-off), not a built-in editor — do not
+merge this with `bread-screenshots`. If/when another verb is needed,
+add it at the same time, not stubbed as a no-op ahead of it.
 
 ## Fail-safe behavior
 

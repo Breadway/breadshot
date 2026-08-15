@@ -8,6 +8,8 @@ pub struct Config {
     pub save_dir: PathBuf,
     pub silent: bool,
     pub freeze: bool,
+    /// Open satty/swappy after capture to annotate the frozen frame.
+    pub annotate: bool,
     pub notif_timeout: u32,
     pub date_format: String,
 }
@@ -20,6 +22,7 @@ impl Default for Config {
                 .join("Screenshots"),
             silent: false,
             freeze: false,
+            annotate: false,
             notif_timeout: 5000,
             date_format: "%Y-%m-%d-%H%M%S".to_string(),
         }
@@ -36,10 +39,10 @@ impl Config {
             tracing::debug!("no config at {}, using defaults", path.display());
             return Ok(Self::default());
         }
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
-        let mut config: Self = toml::from_str(&content)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let content =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let mut config: Self =
+            toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
         config.save_dir = expand_tilde(config.save_dir);
         Ok(config)
     }

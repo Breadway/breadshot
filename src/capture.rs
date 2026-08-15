@@ -44,11 +44,35 @@ pub struct Overrides {
     pub clipboard_only: bool,
     pub silent: bool,
     pub freeze: bool,
+    pub annotate: bool,
     pub output_dir: Option<PathBuf>,
     pub filename: Option<String>,
 }
 
-pub fn run(mode: &Mode, config: &Config, overrides: Overrides) -> Result<()> {
+/// What a successful capture left behind. `path` is `None` when the user
+/// asked for clipboard-only, cancelled the annotator without saving, or
+/// the save file was never written.
+pub struct CaptureOutcome {
+    pub clipboard: bool,
+    pub path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Annotator {
+    Satty,
+    Swappy,
+}
+
+impl Annotator {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Satty => "satty",
+            Self::Swappy => "swappy",
+        }
+    }
+}
+
+pub fn run(mode: &Mode, config: &Config, overrides: Overrides) -> Result<CaptureOutcome> {
     check_deps()?;
 
     let save_dir = overrides.output_dir.as_ref().unwrap_or(&config.save_dir);
@@ -63,39 +87,61 @@ pub fn run(mode: &Mode, config: &Config, overrides: Overrides) -> Result<()> {
     let silent = overrides.silent || config.silent;
     let freeze = overrides.freeze || config.freeze;
     let clipboard_only = overrides.clipboard_only;
+    let annotator = resolve_annotator(overrides.annotate || config.annotate);
 
-    let _freeze_guard = if freeze {
-        FreezeGuard::try_spawn()
-            .map_err(|e| tracing::warn!("freeze: {e}"))
-            .ok()
-    } else {
-        None
+    // Capture under the optional hyprpicker freeze, then drop it before
+    // the annotator window appears so it can take the frozen frame.
+    let captured_png = {
+        let _freeze_guard = if freeze {
+            FreezeGuard::try_spawn()
+                .map_err(|e| tracing::warn!("freeze: {e}"))
+                .ok()
+        } else {
+            None
+        };
+
+        let geometry = geometry_for_mode(mode)?;
+        tracing::debug!("geometry: {geometry}");
+
+        if annotator.is_some() {
+            Some(grim_png(&geometry)?)
+        } else if clipboard_only {
+            copy_only(&geometry)?;
+            None
+        } else {
+            std::fs::create_dir_all(save_dir)
+                .with_context(|| format!("creating {}", save_dir.display()))?;
+            save_and_copy(&geometry, &save_path)?;
+            None
+        }
     };
 
-    let geometry = geometry_for_mode(mode)?;
-    tracing::debug!("geometry: {geometry}");
-
-    if clipboard_only {
-        copy_only(&geometry)?;
-    } else {
-        std::fs::create_dir_all(save_dir)
-            .with_context(|| format!("creating {}", save_dir.display()))?;
-        save_and_copy(&geometry, &save_path)?;
+    if let (Some(tool), Some(png)) = (annotator, captured_png) {
+        if !clipboard_only {
+            std::fs::create_dir_all(save_dir)
+                .with_context(|| format!("creating {}", save_dir.display()))?;
+        }
+        run_annotator(
+            tool,
+            &png,
+            (!clipboard_only).then_some(save_path.as_path()),
+            silent,
+        )?;
     }
 
     // Both capture paths copy the PNG to the clipboard. `path` is null
-    // when the user asked for clipboard-only (no file on disk).
-    emit_captured(
-        mode,
-        true,
-        if clipboard_only {
-            None
-        } else {
-            Some(save_path.as_path())
-        },
-    );
+    // when the user asked for clipboard-only (no file on disk) or the
+    // annotator exited without writing the save file.
+    let path = if clipboard_only || !save_path.exists() {
+        None
+    } else {
+        Some(save_path.as_path())
+    };
 
-    if !silent {
+    emit_captured(mode, true, path);
+
+    // The annotator owns its own copy/save notifications.
+    if !silent && annotator.is_none() {
         let msg = if clipboard_only {
             "Copied to clipboard".to_string()
         } else {
@@ -104,7 +150,10 @@ pub fn run(mode: &Mode, config: &Config, overrides: Overrides) -> Result<()> {
         send_notification("Screenshot", &msg, config.notif_timeout, &save_path);
     }
 
-    Ok(())
+    Ok(CaptureOutcome {
+        clipboard: true,
+        path: path.map(Path::to_path_buf),
+    })
 }
 
 // --- geometry ---
@@ -262,6 +311,103 @@ fn trim_geometry(geometry: &str) -> Result<String> {
 }
 
 // --- capture ---
+
+fn grim_png(geometry: &str) -> Result<Vec<u8>> {
+    let out = Command::new("grim")
+        .args(["-g", geometry, "-"])
+        .output()
+        .context("running grim")?;
+    if !out.status.success() {
+        bail!("grim exited with {}", out.status);
+    }
+    Ok(out.stdout)
+}
+
+fn resolve_annotator(requested: bool) -> Option<Annotator> {
+    if !requested {
+        return None;
+    }
+    match find_annotator() {
+        Some(tool) => Some(tool),
+        None => {
+            eprintln!("breadshot: satty or swappy not found; capturing without annotation");
+            eprintln!(
+                "install satty (preferred) or swappy to freeze the frame and annotate (arrows/text/rect)"
+            );
+            tracing::warn!("annotate requested but satty/swappy missing");
+            None
+        }
+    }
+}
+
+fn find_annotator() -> Option<Annotator> {
+    if in_path("satty") {
+        Some(Annotator::Satty)
+    } else if in_path("swappy") {
+        Some(Annotator::Swappy)
+    } else {
+        None
+    }
+}
+
+fn annotator_args(tool: Annotator, save_path: Option<&Path>, silent: bool) -> Vec<String> {
+    match tool {
+        Annotator::Satty => {
+            let mut args = vec![
+                "--filename".into(),
+                "-".into(),
+                "--fullscreen".into(),
+                "--copy-command".into(),
+                "wl-copy".into(),
+            ];
+            if let Some(path) = save_path {
+                args.push("--output-filename".into());
+                args.push(path.to_string_lossy().into_owned());
+                args.push("--save-after-copy".into());
+            }
+            if silent {
+                args.push("--disable-notifications".into());
+            }
+            // Last so a value-taking satty does not swallow the next flag.
+            args.push("--early-exit".into());
+            args
+        }
+        Annotator::Swappy => {
+            let mut args = vec!["-f".into(), "-".into()];
+            if let Some(path) = save_path {
+                args.push("-o".into());
+                args.push(path.to_string_lossy().into_owned());
+            }
+            args
+        }
+    }
+}
+
+fn run_annotator(
+    tool: Annotator,
+    png: &[u8],
+    save_path: Option<&Path>,
+    silent: bool,
+) -> Result<()> {
+    let mut child = Command::new(tool.name())
+        .args(annotator_args(tool, save_path, silent))
+        .stdin(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawning {}", tool.name()))?;
+
+    child
+        .stdin
+        .take()
+        .context("annotator stdin")?
+        .write_all(png)
+        .context("piping screenshot to annotator")?;
+
+    let status = child.wait().context("waiting for annotator")?;
+    if !status.success() {
+        bail!("{} exited with {status}", tool.name());
+    }
+    Ok(())
+}
 
 fn copy_only(geometry: &str) -> Result<()> {
     let mut grim = Command::new("grim")
@@ -463,5 +609,58 @@ mod tests {
         assert_eq!(v["mode"], "active-output");
         assert_eq!(v["clipboard"], true);
         assert_eq!(v["path"], "/tmp/shot.png");
+    }
+
+    #[test]
+    fn satty_args_fullscreen_copy_and_early_exit() {
+        let args = annotator_args(Annotator::Satty, None, false);
+        assert_eq!(
+            args,
+            [
+                "--filename",
+                "-",
+                "--fullscreen",
+                "--copy-command",
+                "wl-copy",
+                "--early-exit"
+            ]
+        );
+    }
+
+    #[test]
+    fn satty_args_save_path_and_silent() {
+        let path = Path::new("/tmp/shot.png");
+        let args = annotator_args(Annotator::Satty, Some(path), true);
+        assert_eq!(
+            args,
+            [
+                "--filename",
+                "-",
+                "--fullscreen",
+                "--copy-command",
+                "wl-copy",
+                "--output-filename",
+                "/tmp/shot.png",
+                "--save-after-copy",
+                "--disable-notifications",
+                "--early-exit"
+            ]
+        );
+    }
+
+    #[test]
+    fn swappy_args_stdin_and_optional_output() {
+        assert_eq!(annotator_args(Annotator::Swappy, None, true), ["-f", "-"]);
+        let path = Path::new("/tmp/shot.png");
+        assert_eq!(
+            annotator_args(Annotator::Swappy, Some(path), false),
+            ["-f", "-", "-o", "/tmp/shot.png"]
+        );
+    }
+
+    #[test]
+    fn annotator_prefers_satty_name() {
+        assert_eq!(Annotator::Satty.name(), "satty");
+        assert_eq!(Annotator::Swappy.name(), "swappy");
     }
 }

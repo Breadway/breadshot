@@ -40,6 +40,10 @@ struct CaptureOpts {
     #[arg(long, short = 'z')]
     freeze: bool,
 
+    /// Freeze the captured frame and annotate (requires satty or swappy)
+    #[arg(long, short = 'a')]
+    annotate: bool,
+
     /// Override save directory from config
     #[arg(long, short = 'o', value_name = "DIR")]
     output_dir: Option<PathBuf>,
@@ -63,7 +67,9 @@ enum Command {
     /// Capture the active monitor
     #[command(name = "active-output")]
     ActiveOutput(CaptureOpts),
-    /// Subscribe to bread.command.shot.** and honor region captures
+    /// Capture a region, freeze the frame, and annotate
+    Annotate(CaptureOpts),
+    /// Subscribe to bread.command.shot.** and honor region/annotate captures
     Listen,
 }
 
@@ -75,6 +81,10 @@ impl Command {
             Self::Output(opts) => Some((Mode::Output, opts)),
             Self::ActiveWindow(opts) => Some((Mode::ActiveWindow, opts)),
             Self::ActiveOutput(opts) => Some((Mode::ActiveOutput, opts)),
+            Self::Annotate(mut opts) => {
+                opts.annotate = true;
+                Some((Mode::Region, opts))
+            }
             Self::Listen => None,
         }
     }
@@ -104,8 +114,10 @@ fn main() -> Result<()> {
             clipboard_only: opts.clipboard_only,
             silent: opts.silent,
             freeze: opts.freeze,
+            annotate: opts.annotate,
             output_dir: opts.output_dir,
             filename: opts.filename,
         },
-    )
+    )?;
+    Ok(())
 }

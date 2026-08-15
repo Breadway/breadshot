@@ -28,6 +28,8 @@ Required (must be in `$PATH`):
 Optional:
 
 - `hyprpicker` — screen freeze during selection (`--freeze`)
+- `satty` — freeze the captured frame and annotate (arrows/text/rect). Preferred for `--annotate`
+- `swappy` — fallback annotator if `satty` is missing
 - `notify-send` — desktop notifications (silently skipped if absent)
 
 ## Build and install
@@ -47,13 +49,15 @@ make install PREFIX=/usr
 
 ```
 breadshot <mode> [options]
+breadshot annotate [options]
 breadshot listen
 ```
 
 `breadshot listen` is the long-running process that honors
-`bread.command.shot.region` on the bread event bus (clipboard-only
-region capture). See [EVENTS.md](EVENTS.md). Without it, the CLI still
-works; bus commands are a silent no-op.
+`bread.command.shot.region` (clipboard-only region capture) and
+`bread.command.shot.annotate` (region capture, then freeze-and-annotate)
+on the bread event bus. See [EVENTS.md](EVENTS.md). Without it, the CLI
+still works; bus commands are a silent no-op.
 
 ### Modes
 
@@ -64,6 +68,7 @@ works; bus commands are a silent no-op.
 | `output` | Click to select a monitor |
 | `active-window` | Capture the currently focused window |
 | `active-output` | Capture the monitor containing the active workspace |
+| `annotate` | Region capture, then freeze the frame for arrows/text/rect (requires `satty` or `swappy`) |
 
 ### Options
 
@@ -72,9 +77,14 @@ works; bus commands are a silent no-op.
 | `--clipboard-only` | `-c` | Copy to clipboard only, do not save to disk |
 | `--silent` | `-s` | Suppress notifications |
 | `--freeze` | `-z` | Freeze screen during selection (requires `hyprpicker`) |
+| `--annotate` | `-a` | Freeze the captured frame and annotate (requires `satty` or `swappy`) |
 | `--output-dir <DIR>` | `-o` | Override the save directory from config |
 | `--filename <NAME>` | `-f` | Override the output filename (without path) |
 | `--config <FILE>` | | Use a specific config file |
+
+If `--annotate` is set (or `breadshot annotate` is used) but neither
+`satty` nor `swappy` is in `$PATH`, breadshot prints a warning and
+falls back to the normal grim+slurp capture.
 
 ### Examples
 
@@ -87,6 +97,11 @@ breadshot active-window --clipboard-only
 
 # region selection with screen frozen, saved to a custom path
 breadshot region --freeze --output-dir ~/Desktop --filename capture.png
+
+# region capture, then freeze the frame and annotate
+breadshot annotate
+breadshot region --annotate
+breadshot output --annotate
 ```
 
 ## Configuration
@@ -104,6 +119,9 @@ silent = false
 
 # Freeze screen during selection by default (requires hyprpicker)
 freeze = false
+
+# Freeze the captured frame and annotate by default (requires satty or swappy)
+annotate = false
 
 # Notification display duration in milliseconds
 notif_timeout = 5000
