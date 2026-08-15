@@ -10,6 +10,10 @@ use std::{
 
 use crate::config::Config;
 
+/// Sibling-app id in bread's `KNOWN_APPS` registry. Events publish as
+/// `bread.shot.*`. See `EVENTS.md`.
+const APP_ID: &str = "shot";
+
 #[derive(Debug, Clone, ValueEnum)]
 pub enum Mode {
     /// Select a region interactively
@@ -24,6 +28,19 @@ pub enum Mode {
     /// Capture the active monitor
     #[value(name = "active-output")]
     ActiveOutput,
+}
+
+impl Mode {
+    /// CLI / event-payload name (`region`, `active-window`, …).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Region => "region",
+            Self::Window => "window",
+            Self::Output => "output",
+            Self::ActiveWindow => "active-window",
+            Self::ActiveOutput => "active-output",
+        }
+    }
 }
 
 pub struct Overrides {
@@ -68,6 +85,18 @@ pub fn run(mode: &Mode, config: &Config, overrides: Overrides) -> Result<()> {
             .with_context(|| format!("creating {}", save_dir.display()))?;
         save_and_copy(&geometry, &save_path)?;
     }
+
+    // Both capture paths copy the PNG to the clipboard. `path` is null
+    // when the user asked for clipboard-only (no file on disk).
+    emit_captured(
+        mode,
+        true,
+        if clipboard_only {
+            None
+        } else {
+            Some(save_path.as_path())
+        },
+    );
 
     if !silent {
         let msg = if clipboard_only {
@@ -289,6 +318,26 @@ fn save_and_copy(geometry: &str, path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Publishes `bread.shot.captured` into the bread event fabric. Fire-and-forget
+/// and non-fatal by design (`BreadClient::emit` never blocks or errors this
+/// caller) — breadd being absent or not installed must never affect
+/// breadshot's own capture path, only mean this one notification doesn't
+/// go anywhere.
+fn emit_captured(mode: &Mode, clipboard: bool, path: Option<&Path>) {
+    bread_utils::bread_client::BreadClient::connect(APP_ID).emit(
+        "bread.shot.captured",
+        captured_payload(mode, clipboard, path),
+    );
+}
+
+fn captured_payload(mode: &Mode, clipboard: bool, path: Option<&Path>) -> serde_json::Value {
+    serde_json::json!({
+        "mode": mode.as_str(),
+        "clipboard": clipboard,
+        "path": path.map(|p| p.to_string_lossy().into_owned()),
+    })
+}
+
 fn send_notification(title: &str, msg: &str, timeout: u32, path: &Path) {
     let mut cmd = Command::new("notify-send");
     cmd.args([title, msg, "-t", &timeout.to_string(), "-a", "breadshot"]);
@@ -382,5 +431,36 @@ impl Drop for FreezeGuard {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_as_str_matches_cli_names() {
+        assert_eq!(Mode::Region.as_str(), "region");
+        assert_eq!(Mode::Window.as_str(), "window");
+        assert_eq!(Mode::Output.as_str(), "output");
+        assert_eq!(Mode::ActiveWindow.as_str(), "active-window");
+        assert_eq!(Mode::ActiveOutput.as_str(), "active-output");
+    }
+
+    #[test]
+    fn captured_payload_clipboard_only_has_null_path() {
+        let v = captured_payload(&Mode::Region, true, None);
+        assert_eq!(v["mode"], "region");
+        assert_eq!(v["clipboard"], true);
+        assert!(v["path"].is_null());
+    }
+
+    #[test]
+    fn captured_payload_saved_file_includes_path() {
+        let path = Path::new("/tmp/shot.png");
+        let v = captured_payload(&Mode::ActiveOutput, true, Some(path));
+        assert_eq!(v["mode"], "active-output");
+        assert_eq!(v["clipboard"], true);
+        assert_eq!(v["path"], "/tmp/shot.png");
     }
 }
