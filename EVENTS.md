@@ -1,10 +1,10 @@
-# breadshot — bread event integration
+# breadshot: bread event integration
 
 breadshot is a standalone Wayland screenshot orchestrator: it works
 exactly the same with or without `breadd` running. When breadd *is*
 present, a successful capture publishes into the shared bread automation
-fabric. See the parent `bread` repo's `Documentation.md` — specifically
-its "Namespaces" and "Integrating a bread\* app" sections — for the
+fabric. See the parent `bread` repo's `Documentation.md`, specifically
+its "Namespaces" and "Integrating a bread\* app" sections, for the
 general convention this follows.
 
 This is a different job from `bread-screenshots` (the crate in
@@ -13,9 +13,9 @@ sibling apps in CI. Do not merge the two.
 
 App id: **`shot`**. Transport: `bread-utils`'s `bread_client` module
 (feature `bread-client`). One-shot CLI invocations (`breadshot region`,
-…) each `emit` on their own fire-and-forget connection (the same stance
+etc) each `emit` on their own fire-and-forget connection (the same stance
 `bread-emit` takes for occasional callers). Command verbs are only
-received while `breadshot listen` is running — that process holds the
+received while `breadshot listen` is running: that process holds the
 `bread.command.shot.**` subscription open.
 
 ## Events published (`bread.shot.*`)
@@ -26,11 +26,11 @@ received while `breadshot listen` is running — that process holds the
 | `bread.shot.region.done` | `{ "clipboard": true, "path": null }` | `bread.command.shot.region` was received and the region capture succeeded. |
 | `bread.shot.region.failed` | `{ "error": "<message>" }` | `bread.command.shot.region` was received but the capture failed (cancelled slurp, missing dependency, grim/wl-copy error). |
 | `bread.shot.annotate.done` | `{ "clipboard": true, "path": <string or null> }` | `bread.command.shot.annotate` was received and the region capture (plus optional satty/swappy pass) succeeded. `path` is the saved file, or `null` if the annotator exited without writing it. |
-| `bread.shot.annotate.failed` | `{ "error": "<message>" }` | `bread.command.shot.annotate` was received but the capture failed (cancelled slurp, missing grim/slurp, annotator error). Missing satty/swappy is not a failure — breadshot warns and falls back to grim+slurp. |
+| `bread.shot.annotate.failed` | `{ "error": "<message>" }` | `bread.command.shot.annotate` was received but the capture failed (cancelled slurp, missing grim/slurp, annotator error). Missing satty/swappy is not a failure: breadshot warns and falls back to grim+slurp. |
 
 `mode` is the CLI capture-mode name (`region`, `window`, `output`,
-`active-window`, `active-output`) — not the `annotate` subcommand.
-`clipboard` is whether the PNG was written to the clipboard — both current
+`active-window`, `active-output`), not the `annotate` subcommand.
+`clipboard` is whether the PNG was written to the clipboard; both current
 capture paths do this (`save_and_copy` and `--clipboard-only`). `path` is
 the saved file, or `null` when `--clipboard-only` was used (no file on
 disk) or the annotator exited without writing one. The listen-triggered
@@ -44,7 +44,7 @@ screenshot.
 ## Commands honored (`bread.command.shot.*`)
 
 These are only received while `breadshot listen` is running. Publishing a
-command with no subscriber is a silent no-op — that is the documented
+command with no subscriber is a silent no-op; that is the documented
 bread convention, not a breadshot bug.
 
 | Verb | Data | Effect |
@@ -78,7 +78,7 @@ bread.exec("breadshot annotate")
 There is no `window`, `output`, `active-window`, `active-output`, `pin`,
 `select`, or `edit` command verb. The CLI already covers the other
 capture modes as synchronous one-shots. Annotation is the `annotate`
-verb (a thin satty/swappy hand-off), not a built-in editor — do not
+verb (a thin satty/swappy hand-off), not a built-in editor; do not
 merge this with `bread-screenshots`. If/when another verb is needed,
 add it at the same time, not stubbed as a no-op ahead of it.
 
@@ -86,7 +86,7 @@ add it at the same time, not stubbed as a no-op ahead of it.
 
 - If breadd isn't installed or isn't running, `emit` is a silent no-op
   (`BreadClient::emit` never blocks or errors the caller) and the
-  command subscription simply never receives anything — breadshot's
+  command subscription simply never receives anything; breadshot's
   actual grim/slurp/wl-copy path is entirely unaffected either way.
 - If breadd restarts, the command subscription reconnects automatically
   (`BreadClient::subscribe`'s background thread has its own backoff

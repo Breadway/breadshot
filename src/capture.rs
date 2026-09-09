@@ -28,7 +28,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// CLI / event-payload name (`region`, `active-window`, …).
+    /// CLI / event-payload name (`region`, `active-window`, etc).
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Region => "region",
@@ -463,7 +463,7 @@ fn save_and_copy(geometry: &str, path: &Path) -> Result<()> {
 
 /// Publishes `bread.shot.captured` into the bread event fabric. Fire-and-forget
 /// and non-fatal by design (`BreadClient::emit` never blocks or errors this
-/// caller) — breadd being absent or not installed must never affect
+/// caller): breadd being absent or not installed must never affect
 /// breadshot's own capture path, only mean this one notification doesn't
 /// go anywhere.
 fn emit_captured(mode: &Mode, clipboard: bool, path: Option<&Path>) {

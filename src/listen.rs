@@ -31,7 +31,7 @@ pub fn run(config: &Config) -> Result<()> {
 }
 
 /// Reacts to `bread.command.shot.*` verbs. Only `region` and `annotate` are
-/// honored — other verbs are ignored, not stubbed as no-ops that pretend
+/// honored; other verbs are ignored, not stubbed as no-ops that pretend
 /// to succeed.
 ///
 /// Emits `bread.shot.<verb>.done` / `.failed` per the confirmation

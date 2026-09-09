@@ -1,6 +1,6 @@
 # breadshot
 
-Wayland screenshot **orchestrator** for the bread ecosystem — not a GUI editor.
+Wayland screenshot **orchestrator** for the bread ecosystem, not a GUI editor.
 It shells out to `grim`, `slurp`, and `wl-copy` with Hyprland-aware geometry
 resolution, clipboard integration, and desktop notifications.
 
@@ -20,17 +20,17 @@ On BOS, Hyprland binds `Super+Shift+S` / `C` / `P` to breadshot (not grimblast):
 
 Required (must be in `$PATH`):
 
-- `grim` — Wayland screenshot tool
-- `slurp` — region/window selection
-- `wl-copy` (wl-clipboard) — clipboard write
-- `hyprctl` — Hyprland IPC (for window and monitor geometry)
+- `grim`: Wayland screenshot tool
+- `slurp`: region/window selection
+- `wl-copy` (wl-clipboard): clipboard write
+- `hyprctl`: Hyprland IPC (for window and monitor geometry)
 
 Optional:
 
-- `hyprpicker` — screen freeze during selection (`--freeze`)
-- `satty` — freeze the captured frame and annotate (arrows/text/rect). Preferred for `--annotate`
-- `swappy` — fallback annotator if `satty` is missing
-- `notify-send` — desktop notifications (silently skipped if absent)
+- `hyprpicker`: screen freeze during selection (`--freeze`)
+- `satty`: freeze the captured frame and annotate (arrows/text/rect). Preferred for `--annotate`
+- `swappy`: fallback annotator if `satty` is missing
+- `notify-send`: desktop notifications (silently skipped if absent)
 
 ## Build and install
 
@@ -133,4 +133,4 @@ date_format = "%Y-%m-%d-%H%M%S"
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
