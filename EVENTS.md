@@ -1,4 +1,4 @@
-# breadshot: bread event integration
+# shot: bread event integration
 
 breadshot is a standalone Wayland screenshot orchestrator: it works
 exactly the same with or without `breadd` running. When breadd *is*
