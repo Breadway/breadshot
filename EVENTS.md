@@ -73,7 +73,7 @@ bread.exec("breadshot active-output")
 bread.exec("breadshot annotate")
 ```
 
-### Not implemented: extra verbs
+## Not implemented
 
 There is no `window`, `output`, `active-window`, `active-output`, `pin`,
 `select`, or `edit` command verb. The CLI already covers the other
